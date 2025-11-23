@@ -1,17 +1,16 @@
-name: Node.js CI/CD to ECR
+name: CI/CD Direct to EC2
 
 on:
   push:
     branches:
       - main
 
-
 jobs:
-  build-and-push:
+  build-and-deploy:
     runs-on: ubuntu-latest
     environment: cicd
     steps:
-      - name: Checkout repo
+      - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Set up Node.js
@@ -33,12 +32,10 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
       - name: Build Docker image
-        run: |
-          docker build -t test/ci-cd .
+        run: docker build -t test/ci-cd .
 
       - name: Tag Docker image for ECR
         run: |
@@ -47,3 +44,17 @@ jobs:
       - name: Push Docker image to ECR
         run: |
           docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/test/ci-cd:latest
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+            docker pull ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/test/ci-cd:latest
+            docker stop nodejs-app || true
+            docker rm nodejs-app || true
+            docker run -d --name nodejs-app -p 3000:3000 ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/test/ci-cd:latest
+
