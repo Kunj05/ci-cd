@@ -5,9 +5,11 @@ on:
     branches:
       - main
 
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    environment: cicd
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
